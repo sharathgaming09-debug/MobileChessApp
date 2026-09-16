@@ -1,0 +1,73 @@
+name: Build Chess APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip autoconf libtool \
+            pkg-config zlib1g-dev \
+            libncurses5-dev libncursesw5-dev \
+            cmake libffi-dev \
+            libssl-dev automake
+
+      - name: Install Buildozer
+        run: |
+          python -m pip install --upgrade pip
+          pip install buildozer
+          pip install "cython==0.29.34"
+
+      - name: Create Buildozer configuration
+        run: |
+          buildozer init
+          sed -i 's/^title = .*/title = Mobile Chess/' buildozer.spec
+          sed -i 's/^package.name = .*/package.name = mobilechess/' buildozer.spec
+          sed -i 's/^package.domain = .*/package.domain = org.mobilechess/' buildozer.spec
+          sed -i 's/^requirements = .*/requirements = python3,kivy/' buildozer.spec
+          sed -i 's/^# android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set +e
+          buildozer -v android debug 2>&1 | tee buildozer.log
+          STATUS=${PIPESTATUS[0]}
+          exit $STATUS
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-log
+          path: buildozer.log
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MobileChess-APK
+          path: bin/*.apk
